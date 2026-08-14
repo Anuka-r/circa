@@ -1,0 +1,81 @@
+name: circa
+description: "Circa — your body clock, dialed in. A circadian coach that reads the sun and your sleep."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State & routing
+  flutter_riverpod: ^3.3.2
+  go_router: ^17.3.0
+
+  # Local-first storage.
+  # Hand-written SQL on sqflite rather than Drift: drift_dev 2.34.0 (the newest
+  # release compatible with the analyzer that flutter_test pins) silently drops
+  # every IntegerColumn from its generated code. Verified with a minimal probe
+  # table. Rather than ship a data layer built on a broken generator, the schema
+  # and queries here are explicit — see lib/data/local/database.dart.
+  sqflite: ^2.4.3
+
+  # Time & place — the engine's inputs
+  timezone: ^0.11.1
+  flutter_timezone: ^5.1.0
+  # Location is resolved from the bundled city dataset and the device time
+  # zone, not GPS. `geolocator` is deliberately absent: it merges
+  # ACCESS_FINE_LOCATION into the manifest, and shipping a location permission
+  # for a capability the app does not use is a Play Data-safety and App Review
+  # problem. Re-add it with the feature, not before.
+  # `geocoding` is absent for the same reason plus a hard version conflict:
+  # it pins analyzer <13 through pigeon, which collides with the rest of the
+  # toolchain. See assets/data/cities.json + CityLookup.
+
+  # Platform.
+  # `flutter_local_notifications` is deliberately absent until the scheduler in
+  # docs/08 §5.3 is built — it registers boot and alarm receivers, and an app
+  # that declares them but never schedules anything is dead weight.
+  uuid: ^4.6.0
+
+  # Monetization
+  purchases_flutter: ^9.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  sqflite_common_ffi: ^2.4.2
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/data/
+
+  fonts:
+    # Bundled deliberately rather than fetched at runtime (google_fonts) —
+    # a network font fetch would break offline-first and cause a first-run swap.
+    #
+    # Space Grotesk replaced Plus Jakarta Sans as the UI face. Jakarta is a
+    # competent neutral grotesque, which is exactly the problem: at the weights
+    # a UI actually uses it reads as the system default, so the app looked
+    # unstyled. Space Grotesk keeps the same tabular figure set (`tnum`) that
+    # the type scale depends on and adds a slashed `zero`, while its narrowed
+    # apertures and squared terminals give clock times and metrics an identity.
+    #
+    # Its variable `wght` range is 300–700 (Jakarta's was 200–800) and its
+    # default instance is 300, not 400 — so every style in CircaTypography must
+    # set `wght` explicitly via fontVariations. They all do; a style that
+    # forgot would render visibly light rather than merely wrong.
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk.ttf
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces.ttf
