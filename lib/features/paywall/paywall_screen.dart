@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/di/providers.dart';
 import '../../core/theme/circa_theme.dart';
@@ -222,7 +224,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                             style: t.type.bodyS
                                 .copyWith(color: colors.textTertiary)),
                         TextButton(
-                          onPressed: () {},
+                          onPressed: () => context.push('/legal/terms'),
                           child: Text(
                             'Terms',
                             style: t.type.bodyS
@@ -233,7 +235,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                             style: t.type.bodyS
                                 .copyWith(color: colors.textTertiary)),
                         TextButton(
-                          onPressed: () {},
+                          onPressed: () => context.push('/legal/privacy'),
                           child: Text(
                             'Privacy',
                             style: t.type.bodyS
@@ -252,13 +254,24 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
+  /// Only what Pro actually unlocks today.
+  ///
+  /// This list previously carried four claims the paid tier does not honour:
+  /// a jet lag planner (the enum exists, but `ProtocolEngine.buildDay` has no
+  /// jetLag branch and no trip builder is written), a trends screen, Health
+  /// sync and data export — the last three listed in docs/12 §3.4 as
+  /// deliberately not built.
+  ///
+  /// A paywall describing features the purchase does not deliver is a Play
+  /// "Deceptive Behavior" violation regardless of intent, and it is the
+  /// fastest way to lose a judge who redeems a code and finds an empty tier.
+  /// Add a line back on the day the feature ships, not before.
   static const _benefits = [
     '3-day energy forecast, not just today',
-    'Jet lag planner for any trip',
-    'Shift-work and early-riser protocols',
-    'Unlimited history and trends',
-    'Apple Health and Health Connect sync',
-    'Export your data whenever you like',
+    'Early Riser and Shift Work protocols',
+    // 60 nights, not "unlimited": watchSleepSessions caps the window at
+    // limitDays = 60, and the free tier shows the 7 most recent entries.
+    'Your last 60 nights, not just the last seven',
   ];
 
   /// Resolves the selection against the *loaded* plans, so the renewal terms
@@ -466,6 +479,16 @@ class _OfflinePlans extends StatelessWidget {
   const _OfflinePlans({required this.onRetry});
   final VoidCallback onRetry;
 
+  /// Named rather than left as "the store", because a user who is told to
+  /// check their connection needs to know which account is failing. Hardcoding
+  /// "App Store" here shipped Apple's name to every Android user — the store
+  /// Circa actually launches on.
+  static String get _storeName => switch (defaultTargetPlatform) {
+        TargetPlatform.iOS || TargetPlatform.macOS => 'the App Store',
+        TargetPlatform.android => 'Google Play',
+        _ => 'the store',
+      };
+
   @override
   Widget build(BuildContext context) {
     final t = context.circa;
@@ -480,7 +503,7 @@ class _OfflinePlans extends StatelessWidget {
           ),
           SizedBox(height: t.space.xs),
           Text(
-            'Prices come from the App Store, so this needs a connection. '
+            'Prices come from $_storeName, so this needs a connection. '
             'Everything else in Circa keeps working offline.',
             textAlign: TextAlign.center,
             style: t.type.bodyS.copyWith(color: t.color.textSecondary),

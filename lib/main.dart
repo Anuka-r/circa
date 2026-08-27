@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,7 +36,22 @@ const _appleKey = String.fromEnvironment('REVENUECAT_APPLE_KEY');
 /// platform-specific key was supplied.
 const _legacyKey = String.fromEnvironment('REVENUECAT_KEY');
 
+/// RevenueCat **Test Store** key, for exercising the paywall end to end before
+/// the store accounts exist — real offerings, real prices, real entitlement
+/// grants, and a simulated purchase sheet, with no Play Console involved.
+///
+///   flutter run --dart-define=REVENUECAT_TEST_KEY=test_xxxxxxxx
+///
+/// Read only outside release builds, by design. Shipping a Test Store key to
+/// Play is the same class of failure the `goog_`/`appl_` split above exists to
+/// prevent, and a worse one: the build looks healthy, the paywall renders, and
+/// nothing is ever actually sold. A release build ignores this define
+/// entirely — the branch is const-folded away — even if CI passes it by
+/// mistake.
+const _testStoreKey = String.fromEnvironment('REVENUECAT_TEST_KEY');
+
 String _storeKey() {
+  if (!kReleaseMode && _testStoreKey.isNotEmpty) return _testStoreKey;
   final key = switch (defaultTargetPlatform) {
     TargetPlatform.android => _androidKey,
     TargetPlatform.iOS || TargetPlatform.macOS => _appleKey,

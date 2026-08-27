@@ -18,10 +18,11 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# The .vscode folder holds launch configurations, and ours carry RevenueCat
+# API keys as --dart-define arguments. This repo goes public before the
+# Shipaton deadline, so the folder is ignored rather than shared. Flutter's
+# template leaves this line commented out; that default is wrong for us.
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/

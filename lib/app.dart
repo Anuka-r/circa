@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,7 +22,7 @@ class _CircaAppState extends ConsumerState<CircaApp> {
     // seeds from its own on-disk cache, so Pro is correct on a cold offline
     // start rather than flickering to free and back.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(purchaseServiceProvider).startListening();
+      unawaited(ref.read(purchaseServiceProvider).startListening());
     });
   }
 

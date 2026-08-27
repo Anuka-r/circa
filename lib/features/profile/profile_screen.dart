@@ -120,6 +120,37 @@ class ProfileScreen extends ConsumerWidget {
           ),
 
           SizedBox(height: t.space.section),
+          const SectionLabel('Legal'),
+          GlassCard(
+            child: Column(
+              children: [
+                _LinkRow(
+                  label: 'Privacy Policy',
+                  onTap: () => context.push('/legal/privacy'),
+                ),
+                _LinkRow(
+                  label: 'Terms of Use',
+                  onTap: () => context.push('/legal/terms'),
+                  isLast: true,
+                ),
+              ],
+            ),
+          ),
+
+          // Play requires a way to delete what the app has collected, and the
+          // Privacy Policy promises this exact control. CircaRepository.wipe()
+          // has existed (and been tested) since the data layer was written —
+          // only the button was missing, which made the promise a lie.
+          SizedBox(height: t.space.sm),
+          CircaButton(
+            label: 'Delete all data',
+            variant: CircaButtonVariant.destructive,
+            size: CircaButtonSize.md,
+            expand: true,
+            onPressed: () => _confirmWipe(context, ref),
+          ),
+
+          SizedBox(height: t.space.section),
           const SectionLabel('About'),
           GlassCard(
             child: Column(
@@ -174,6 +205,77 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// Destructive and irreversible, so it asks first and names what goes.
+  Future<void> _confirmWipe(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete all data?'),
+        content: const Text(
+          'Every sleep night, caffeine and light entry, and your chronotype '
+          'answers will be erased from this device. Circa keeps no copy on a '
+          'server, so this cannot be undone.\n\n'
+          'Your Circa Pro purchase is not affected — restore it any time.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete everything'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await ref.read(repositoryProvider).wipe();
+    ref.invalidate(todayProvider);
+    if (!context.mounted) return;
+    showCircaSnack(context, 'All data deleted', kind: SnackKind.success);
+  }
+}
+
+/// A tappable row that opens something. Matches [_InfoRow]'s metrics so the
+/// Legal card sits flush with the cards above it.
+class _LinkRow extends StatelessWidget {
+  const _LinkRow({
+    required this.label,
+    required this.onTap,
+    this.isLast = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.circa;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: EdgeInsets.only(
+          top: t.space.sm,
+          bottom: isLast ? t.space.sm : t.space.base,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: t.type.bodyM.copyWith(color: t.color.textPrimary),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: t.color.textTertiary),
+          ],
+        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/forecast/forecast_screen.dart';
+import '../../features/legal/legal_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/paywall/paywall_screen.dart';
 import '../../features/plan/plan_screen.dart';
@@ -28,6 +29,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       final profile = ref.read(profileProvider).value;
       if (profile == null) return null; // still loading; stay put
 
+      // Legal text is reachable from anywhere, including mid-onboarding.
+      // Bouncing someone to /onboarding when they tap "Privacy" on a consent
+      // step is how you end up with a consent flow nobody can read.
+      if (state.matchedLocation.startsWith('/legal')) return null;
+
       final onboarding = state.matchedLocation.startsWith('/onboarding');
       if (!profile.onboarded && !onboarding) return '/onboarding';
       if (profile.onboarded && onboarding) return '/today';
@@ -51,6 +57,22 @@ final routerProvider = Provider<GoRouter>((ref) {
             source: state.uri.queryParameters['source'] ?? 'unknown',
           ),
         ),
+      ),
+
+      // Pushed over the shell: these are read from the paywall, from Profile,
+      // and potentially from onboarding, so they cannot live inside one tab.
+      GoRoute(
+        path: '/legal/privacy',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) =>
+            const LegalScreen(document: CircaLegal.privacy),
+      ),
+
+      GoRoute(
+        path: '/legal/terms',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) =>
+            const LegalScreen(document: CircaLegal.terms),
       ),
 
       ShellRoute(

@@ -183,13 +183,27 @@ class LoggedCaffeine {
 /// connection exists. That is why every screen behaves identically online and
 /// offline — the network is an optimisation, never a dependency.
 class CircaRepository {
-  CircaRepository(this._db);
+  CircaRepository(this._db, {DateTime Function()? clock})
+      : _clock = clock ?? _wallClock;
 
   final AppDatabase _db;
+
+  /// The repository's only source of "now".
+  ///
+  /// Every read here is windowed relative to the present — sleep to 60 days,
+  /// light to 14, caffeine to 7 — so a test that writes a row at a literal
+  /// date passes until the calendar rolls past that window and then fails on a
+  /// day nobody touched the code. Widening the windows would hide that; taking
+  /// the clock as a dependency removes it. Production passes nothing and gets
+  /// the wall clock.
+  final DateTime Function() _clock;
+
+  static DateTime _wallClock() => DateTime.now().toUtc();
+
   static const _uuid = Uuid();
   static const profileId = 'me';
 
-  int get _now => DateTime.now().toUtc().millisecondsSinceEpoch;
+  int get _now => _clock().toUtc().millisecondsSinceEpoch;
 
   /// Re-runs [read] whenever one of [tables] changes. This is the reactive
   /// layer sqflite doesn't provide.
@@ -320,7 +334,7 @@ class CircaRepository {
       _watch({Tables.sleep}, () => getSleepSessions(limitDays: limitDays));
 
   Future<List<SleepSession>> getSleepSessions({int limitDays = 60}) async {
-    final cutoff = DateTime.now()
+    final cutoff = _clock()
         .toUtc()
         .subtract(Duration(days: limitDays))
         .millisecondsSinceEpoch;
@@ -357,7 +371,7 @@ class CircaRepository {
     String? replaceId,
   }) async {
     final id = replaceId ?? _uuid.v4();
-    final now = DateTime.now().toUtc();
+    final now = _clock().toUtc();
 
     await _db.raw.insert(
       Tables.sleep,
@@ -503,7 +517,7 @@ class CircaRepository {
       _watch({Tables.light}, () => getLight(limitDays: limitDays));
 
   Future<List<LoggedLight>> getLight({int limitDays = 14}) async {
-    final cutoff = DateTime.now()
+    final cutoff = _clock()
         .toUtc()
         .subtract(Duration(days: limitDays))
         .millisecondsSinceEpoch;
@@ -577,7 +591,7 @@ class CircaRepository {
       _watch({Tables.caffeine}, () => getCaffeine(limitDays: limitDays));
 
   Future<List<LoggedCaffeine>> getCaffeine({int limitDays = 7}) async {
-    final cutoff = DateTime.now()
+    final cutoff = _clock()
         .toUtc()
         .subtract(Duration(days: limitDays))
         .millisecondsSinceEpoch;

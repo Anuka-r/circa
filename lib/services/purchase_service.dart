@@ -56,14 +56,19 @@ class CircaProduct {
   final String? badge;
   final bool isLifetime;
 
-  CircaProduct copyWith({String? displayPrice}) => CircaProduct(
+  CircaProduct copyWith({
+    String? displayPrice,
+    String? subtitle,
+    int? trialDays,
+  }) =>
+      CircaProduct(
         id: id,
         packageType: packageType,
         title: title,
-        subtitle: subtitle,
+        subtitle: subtitle ?? this.subtitle,
         displayPrice: displayPrice ?? this.displayPrice,
         periodLabel: periodLabel,
-        trialDays: trialDays,
+        trialDays: trialDays ?? this.trialDays,
         badge: badge,
         isLifetime: isLifetime,
       );
@@ -162,10 +167,35 @@ class PurchaseService {
 
   static bool _configured = false;
 
+  /// Completes once [configure] has settled, however it settled.
+  ///
+  /// `main()` deliberately does not await configuration — a slow or unreachable
+  /// store must not delay the first frame — which means every entry point below
+  /// races the SDK handshake unless it waits here first, and loses. The first
+  /// frame renders long before a platform-channel call and a network round trip
+  /// finish, so [startListening] would find `_configured` still false, report
+  /// the store unavailable and return *without attaching the listener or ever
+  /// retrying*. A paying customer would then sit on the free tier for the whole
+  /// session — precisely the lockout this class is written to avoid.
+  static Future<void>? _configuration;
+
   /// Configures the SDK. Safe to call when no API key is present: the app then
   /// runs in free tier with an honest "store unavailable" paywall state rather
   /// than crashing at boot.
+  ///
+  /// Idempotent — repeat calls return the first call's future rather than
+  /// reconfiguring the SDK underneath a live session.
   static Future<void> configure({
+    required String apiKey,
+    String? appUserId,
+  }) =>
+      _configuration ??= _configure(apiKey: apiKey, appUserId: appUserId);
+
+  /// Waits for configuration to settle. A no-op when [configure] was never
+  /// called at all, which is the case under test.
+  static Future<void> _ready() => _configuration ?? Future<void>.value();
+
+  static Future<void> _configure({
     required String apiKey,
     String? appUserId,
   }) async {
@@ -198,7 +228,8 @@ class PurchaseService {
   bool get isConfigured => _configured;
 
   /// Starts listening for entitlement changes and pushes them into state.
-  void startListening() {
+  Future<void> startListening() async {
+    await _ready();
     if (!_configured) {
       _ref.read(purchaseStateProvider.notifier).markStoreUnavailable();
       return;
@@ -236,6 +267,7 @@ class PurchaseService {
   /// problem on our side, while the bundled prices this class carries for
   /// exactly this purpose went unused.
   Future<PlanSet> loadOfferings() async {
+    await _ready();
     // No store credentials in this build. Not a network problem, so don't let
     // the paywall claim it is.
     if (!_configured) return PlanSet.bundled;
@@ -269,8 +301,15 @@ class PurchaseService {
         priced.add(template);
       } else {
         pricedFromStore++;
+        final product = match.storeProduct;
         priced.add(
-          template.copyWith(displayPrice: match.storeProduct.priceString),
+          template.copyWith(
+            displayPrice: product.priceString,
+            trialDays: _trialDaysFor(product),
+            subtitle: template.packageType == PackageType.annual
+                ? _annualSubtitle(product, current.availablePackages)
+                : null,
+          ),
         );
       }
     }
@@ -280,6 +319,68 @@ class PurchaseService {
       plans: priced,
       pricesAreLive: pricedFromStore == priced.length,
     );
+  }
+
+  /// The free-trial length the store will actually honour, in days. Zero when
+  /// the product carries no free phase at all.
+  ///
+  /// Read from the store rather than trusted from [CircaProducts], because the
+  /// bundled definitions describe the *intended* offer. An offer that exists in
+  /// the spec but not in the dashboard would have the paywall promise a free
+  /// trial the store never grants — a store-review rejection, not a cosmetic
+  /// slip. Verified against the Test Store, which prices annual with no trial:
+  /// the bundled `trialDays: 7` had the CTA reading "Start 7 days free" over a
+  /// product that charges immediately.
+  static int _trialDaysFor(StoreProduct product) {
+    // Play Billing 5+ models a trial as a zero-price phase on the base plan.
+    final freePeriod = product.defaultOption?.freePhase?.billingPeriod;
+    if (freePeriod != null) {
+      return _periodInDays(freePeriod.unit, freePeriod.value);
+    }
+    // StoreKit surfaces the same thing as a zero-price introductory offer.
+    final intro = product.introductoryPrice;
+    if (intro != null && intro.price == 0) {
+      return _periodInDays(intro.periodUnit, intro.periodNumberOfUnits);
+    }
+    return 0;
+  }
+
+  static int _periodInDays(PeriodUnit unit, int value) => switch (unit) {
+        PeriodUnit.day => value,
+        PeriodUnit.week => value * 7,
+        PeriodUnit.month => value * 30,
+        PeriodUnit.year => value * 365,
+        PeriodUnit.unknown => 0,
+      };
+
+  /// The annual tile's subtitle, rebuilt from what the store actually charges.
+  ///
+  /// The bundled string is `$3.33 / month · save 52%`, which holds only at the
+  /// bundled US price. Left standing beside a live price it is wrong twice: the
+  /// arithmetic no longer works, and it prints dollars to a shopper whose price
+  /// directly above reads ₹ or €. [StoreProduct.pricePerMonthString] is
+  /// formatted by the store in the shopper's own currency, so the two halves of
+  /// the tile can never disagree.
+  ///
+  /// The saving is measured against the live monthly package, so it stays true
+  /// under regional pricing — where the annual/monthly ratio is not the one the
+  /// US price list implies. Returns null when the store gives us too little to
+  /// say anything true, and the bundled copy stands.
+  static String? _annualSubtitle(StoreProduct annual, List<Package> packages) {
+    final perMonthString = annual.pricePerMonthString;
+    if (perMonthString == null) return null;
+
+    final monthlyPrice =
+        _packageFor(CircaProducts.monthly, packages)?.storeProduct.price;
+    final annualPerMonth = annual.pricePerMonth;
+    if (monthlyPrice == null || monthlyPrice <= 0 || annualPerMonth == null) {
+      return '$perMonthString / month';
+    }
+
+    final saved = ((1 - annualPerMonth / monthlyPrice) * 100).round();
+    return saved > 0
+        ? '$perMonthString / month · save $saved%'
+        : '$perMonthString / month';
   }
 
   /// Locates the package for a plan within an offering.
@@ -294,6 +395,7 @@ class PurchaseService {
   }
 
   Future<PurchaseResult> purchase(String productId) async {
+    await _ready();
     if (!_configured) return PurchaseResult.storeUnavailable;
 
     final template = CircaProducts.byId(productId);
@@ -332,6 +434,7 @@ class PurchaseService {
   }
 
   Future<bool> restore() async {
+    await _ready();
     if (!_configured) return false;
     try {
       final info = await Purchases.restorePurchases();

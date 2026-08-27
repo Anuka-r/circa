@@ -8,6 +8,9 @@ import 'package:circa/domain/value_objects/geo_location.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+/// The instant every fixture in this file is written relative to.
+final _testNow = DateTime.utc(2026, 7, 22, 12);
+
 void main() {
   setUpAll(() {
     sqfliteFfiInit();
@@ -19,7 +22,13 @@ void main() {
 
   setUp(() async {
     db = await AppDatabase.openInMemory();
-    repo = CircaRepository(db);
+    // Pinned, because every read in this file is windowed relative to "now"
+    // (sleep 60 days, light 14, caffeine 7) while the fixtures below are
+    // written at literal dates. With the wall clock these tests pass until the
+    // calendar walks past the shortest window and then fail on a day nobody
+    // changed the code — which is exactly what happened to the light and
+    // caffeine cases.
+    repo = CircaRepository(db, clock: () => _testNow);
   });
 
   tearDown(() async => db.close());
