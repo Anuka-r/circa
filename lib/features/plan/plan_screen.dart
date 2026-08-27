@@ -89,24 +89,14 @@ class PlanScreen extends ConsumerWidget {
               child: _ProtocolCard(
                 kind: kind,
                 isActive: kind == active,
-                // Jet Lag is never shown as a locked/paid card: it is not
-                // something Pro currently buys you.
-                locked: kind.isPro && !isPro && kind != ProtocolKind.jetLag,
+                locked: kind.isPro && !isPro,
                 onTap: () async {
-                  // Checked before the paywall push, deliberately.
-                  //
-                  // Jet Lag has no trip builder and no branch in
-                  // ProtocolEngine.buildDay — activating it would produce a
-                  // plan identical to the free Reset protocol. With the
-                  // paywall check first, a free user tapping it was sent to
-                  // buy Pro, came back, and was told the feature "arrives in
-                  // the next build": paying for something that does not exist.
-                  // Until §3.1 lands, it sells nothing.
+                  // Jet Lag is a screen, not a switch: it needs a trip before
+                  // it can produce a plan, and the planner gates itself. Free
+                  // users land on the real plan behind ProGate rather than
+                  // being bounced to the paywall with nothing to look at.
                   if (kind == ProtocolKind.jetLag) {
-                    showCircaSnack(
-                      context,
-                      'Trip planning arrives in the next build',
-                    );
+                    context.push('/jetlag');
                     return;
                   }
                   if (kind.isPro && !isPro) {

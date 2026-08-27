@@ -34,7 +34,9 @@ class AppDatabase {
     if (!_changes.isClosed) _changes.add(tables);
   }
 
-  static const _schemaVersion = 1;
+  /// Bumped to 2 for `trips`. Every future bump needs a matching branch in
+  /// [_upgrade] — `onCreate` alone only helps installs that did not exist yet.
+  static const _schemaVersion = 2;
 
   static Future<AppDatabase> open({String fileName = 'circa.db'}) async {
     final dir = await getDatabasesPath();
@@ -45,6 +47,7 @@ class AppDatabase {
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: (db, version) async => _createSchema(db),
+      onUpgrade: _upgrade,
     );
     return AppDatabase._(db);
   }
@@ -55,6 +58,7 @@ class AppDatabase {
       inMemoryDatabasePath,
       version: _schemaVersion,
       onCreate: (db, version) async => _createSchema(db),
+      onUpgrade: _upgrade,
     );
     return AppDatabase._(db);
   }
@@ -178,6 +182,8 @@ class AppDatabase {
       )
     ''');
 
+    batch.execute(_createTrips);
+
     batch.execute('''
       CREATE TABLE outbox (
         seq         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -194,6 +200,40 @@ class AppDatabase {
 
     await batch.commit(noResult: true);
   }
+
+  /// One row, id `active`: Circa plans one trip at a time, the same way it runs
+  /// one protocol at a time. Both ends of the flight are stored as UTC
+  /// instants with their IANA zone alongside, so a plan built in London still
+  /// renders correctly once the phone is on Tokyo time.
+  static const _createTrips = '''
+      CREATE TABLE trips (
+        id             TEXT PRIMARY KEY,
+        origin_lat     REAL NOT NULL,
+        origin_lon     REAL NOT NULL,
+        origin_tz      TEXT NOT NULL,
+        origin_label   TEXT,
+        dest_lat       REAL NOT NULL,
+        dest_lon       REAL NOT NULL,
+        dest_tz        TEXT NOT NULL,
+        dest_label     TEXT,
+        departure_utc  INTEGER NOT NULL,
+        arrival_utc    INTEGER NOT NULL,
+        deleted_at     INTEGER,
+        updated_at     INTEGER NOT NULL,
+        sync_state     TEXT NOT NULL DEFAULT 'pending'
+      )
+    ''';
+
+  /// Migrations for databases that already exist on someone's phone.
+  ///
+  /// Written now rather than at the first store update, because by then the
+  /// only way to find out it is missing is a crash loop on the devices that
+  /// upgraded.
+  static Future<void> _upgrade(Database db, int from, int to) async {
+    if (from < 2) {
+      await db.execute(_createTrips);
+    }
+  }
 }
 
 /// Table names, so a typo is a compile error rather than a silent empty result.
@@ -204,6 +244,7 @@ abstract final class Tables {
   static const caffeine = 'caffeine_intakes';
   static const checkins = 'energy_checkins';
   static const completions = 'protocol_completions';
+  static const trips = 'trips';
   static const outbox = 'outbox';
 }
 

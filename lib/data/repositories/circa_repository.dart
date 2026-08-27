@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../domain/chrono/caffeine_model.dart';
 import '../../domain/chrono/chronotype_estimator.dart';
+import '../../domain/chrono/jet_lag_planner.dart';
 import '../../domain/chrono/light_prc.dart';
 import '../../domain/chrono/protocol_engine.dart';
 import '../../domain/chrono/sleep_debt_ledger.dart';
@@ -789,9 +790,112 @@ class CircaRepository {
   }
 
   /// Wipes all local data — used by sign-out and account deletion.
+  // ---------------------------------------------------------------------------
+  // Trips
+  // ---------------------------------------------------------------------------
+
+  /// Circa plans one trip at a time, so the row has a fixed id in the same way
+  /// the profile does. Saving a second trip replaces the first rather than
+  /// quietly accumulating plans nothing will ever show.
+  static const tripId = 'active';
+
+  Stream<Trip?> watchActiveTrip() => _watch({Tables.trips}, getActiveTrip);
+
+  /// The trip currently worth planning around.
+  ///
+  /// A trip stays active until a week after landing: the adaptation it
+  /// describes outlives the flight, and clearing it at touchdown would delete
+  /// the plan exactly when the user needs it most.
+  Future<Trip?> getActiveTrip() async {
+    final rows = await _db.raw.query(
+      Tables.trips,
+      where: 'id = ? AND deleted_at IS NULL',
+      whereArgs: [tripId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+
+    final r = rows.first;
+    final arrival = DateTime.fromMillisecondsSinceEpoch(
+      (r['arrival_utc'] as num).toInt(),
+      isUtc: true,
+    );
+    if (_clock().toUtc().difference(arrival) > const Duration(days: 7)) {
+      return null;
+    }
+
+    return Trip(
+      origin: GeoLocation(
+        latitude: (r['origin_lat'] as num).toDouble(),
+        longitude: (r['origin_lon'] as num).toDouble(),
+        tzId: r['origin_tz'] as String,
+        label: r['origin_label'] as String?,
+      ),
+      destination: GeoLocation(
+        latitude: (r['dest_lat'] as num).toDouble(),
+        longitude: (r['dest_lon'] as num).toDouble(),
+        tzId: r['dest_tz'] as String,
+        label: r['dest_label'] as String?,
+      ),
+      departureUtc: DateTime.fromMillisecondsSinceEpoch(
+        (r['departure_utc'] as num).toInt(),
+        isUtc: true,
+      ),
+      arrivalUtc: arrival,
+    );
+  }
+
+  Future<void> saveTrip(Trip trip) async {
+    await _db.raw.insert(
+      Tables.trips,
+      {
+        'id': tripId,
+        'origin_lat': trip.origin.latitude,
+        'origin_lon': trip.origin.longitude,
+        'origin_tz': trip.origin.tzId,
+        'origin_label': trip.origin.label,
+        'dest_lat': trip.destination.latitude,
+        'dest_lon': trip.destination.longitude,
+        'dest_tz': trip.destination.tzId,
+        'dest_label': trip.destination.label,
+        'departure_utc': trip.departureUtc.toUtc().millisecondsSinceEpoch,
+        'arrival_utc': trip.arrivalUtc.toUtc().millisecondsSinceEpoch,
+        'deleted_at': null,
+        'updated_at': _now,
+        'sync_state': SyncStates.pending,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    await _enqueue('trips', tripId, 'upsert', {
+      'departureUtc': trip.departureUtc.toUtc().millisecondsSinceEpoch,
+      'arrivalUtc': trip.arrivalUtc.toUtc().millisecondsSinceEpoch,
+      'originTz': trip.origin.tzId,
+      'destTz': trip.destination.tzId,
+    });
+    _db.notify({Tables.trips});
+  }
+
+  /// Soft, like every other delete here, so the removal can propagate to a
+  /// device that was offline when it happened.
+  Future<void> deleteTrip() async {
+    await _db.raw.update(
+      Tables.trips,
+      {
+        'deleted_at': _now,
+        'updated_at': _now,
+        'sync_state': SyncStates.pending,
+      },
+      where: 'id = ?',
+      whereArgs: [tripId],
+    );
+    await _enqueue('trips', tripId, 'delete', const {});
+    _db.notify({Tables.trips});
+  }
+
   Future<void> wipe() async {
     await _db.raw.transaction((txn) async {
       for (final table in [
+        Tables.trips,
         Tables.sleep,
         Tables.light,
         Tables.caffeine,
@@ -804,6 +908,7 @@ class CircaRepository {
       }
     });
     _db.notify({
+      Tables.trips,
       Tables.sleep,
       Tables.light,
       Tables.caffeine,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/forecast/forecast_screen.dart';
+import '../../features/jetlag/jet_lag_screen.dart';
 import '../../features/legal/legal_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/paywall/paywall_screen.dart';
@@ -73,6 +74,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootKey,
         builder: (context, state) =>
             const LegalScreen(document: CircaLegal.terms),
+      ),
+
+      // Pushed over the shell rather than living inside the Plan tab: it is a
+      // full task with its own back stack, reached from Plan, from the paywall
+      // and from Today.
+      GoRoute(
+        path: '/jetlag',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const JetLagScreen(),
       ),
 
       ShellRoute(

@@ -8,6 +8,7 @@ import '../../data/repositories/circa_repository.dart';
 import '../../domain/chrono/caffeine_model.dart';
 import '../../domain/chrono/chronotype_estimator.dart';
 import '../../domain/chrono/circadian_phase_model.dart';
+import '../../domain/chrono/jet_lag_planner.dart';
 import '../../domain/chrono/protocol_engine.dart';
 import '../../domain/chrono/sleep_debt_ledger.dart';
 import '../../domain/chrono/two_process_model.dart';
@@ -391,6 +392,39 @@ final _lightProvider = StreamProvider<List<LoggedLight>>(
 final sleepSessionsProvider = _sessionsProvider;
 final caffeineLogProvider = _caffeineProvider;
 final lightLogProvider = _lightProvider;
+
+// -----------------------------------------------------------------------------
+// Jet lag
+// -----------------------------------------------------------------------------
+
+/// The trip the user is currently planning around, or null.
+final activeTripProvider = StreamProvider<Trip?>(
+  (ref) => ref.watch(repositoryProvider).watchActiveTrip(),
+);
+
+/// The plan for [activeTripProvider], rebuilt whenever the trip or the user's
+/// circadian phase changes.
+///
+/// Pure computation — a few hundred floating-point operations per day of plan —
+/// so it is derived rather than stored. Persisting the *plan* would mean a
+/// stale one survives a change of chronotype; persisting only the trip means
+/// the plan is always consistent with what Circa currently believes about the
+/// user's clock.
+final jetLagPlanProvider = Provider<JetLagPlan?>((ref) {
+  final trip = ref.watch(activeTripProvider).value;
+  if (trip == null) return null;
+
+  final today = ref.watch(todayProvider).value;
+  if (today == null) return null;
+
+  final tz = ref.watch(timezoneServiceProvider);
+  return JetLagPlanner.build(
+    trip: trip,
+    phase: today.phase,
+    sleepNeedMinutes: today.profile.sleepNeedMinutes,
+    offsetFor: tz.offsetFor,
+  );
+});
 
 final pendingSyncProvider = StreamProvider<int>(
   (ref) => ref.watch(repositoryProvider).watchPendingSyncCount(),

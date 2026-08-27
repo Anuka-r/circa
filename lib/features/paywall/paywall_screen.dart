@@ -256,17 +256,18 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   /// Only what Pro actually unlocks today.
   ///
-  /// This list previously carried four claims the paid tier does not honour:
-  /// a jet lag planner (the enum exists, but `ProtocolEngine.buildDay` has no
-  /// jetLag branch and no trip builder is written), a trends screen, Health
-  /// sync and data export — the last three listed in docs/12 §3.4 as
-  /// deliberately not built.
+  /// This list once carried four claims the paid tier did not honour. Three of
+  /// them — a trends screen, Health sync, data export — are still listed in
+  /// docs/12 §3.4 as deliberately not built, and stay off this list until they
+  /// exist. The jet lag line is back because the planner now ships: a trip
+  /// builder, and a day-by-day plan driven by the phase-response curve.
   ///
   /// A paywall describing features the purchase does not deliver is a Play
-  /// "Deceptive Behavior" violation regardless of intent, and it is the
-  /// fastest way to lose a judge who redeems a code and finds an empty tier.
-  /// Add a line back on the day the feature ships, not before.
+  /// "Deceptive Behavior" violation regardless of intent, and the fastest way
+  /// to lose a judge who redeems a code and finds an empty tier. Add a line on
+  /// the day the feature ships, not before.
   static const _benefits = [
+    'Jet lag planner — day by day, either side of the flight',
     '3-day energy forecast, not just today',
     'Early Riser and Shift Work protocols',
     // 60 nights, not "unlimited": watchSleepSessions caps the window at

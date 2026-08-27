@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:circa/data/local/database.dart';
 import 'package:circa/data/repositories/circa_repository.dart';
+import 'package:circa/domain/chrono/jet_lag_planner.dart';
 import 'package:circa/domain/chrono/light_prc.dart';
 import 'package:circa/domain/chrono/protocol_engine.dart';
 import 'package:circa/domain/chrono/sleep_debt_ledger.dart';
@@ -295,5 +298,126 @@ void main() {
       expect(await repo.getCompletions(), isEmpty);
       expect(await repo.pendingSyncCount(), 0);
     });
+
+    test('takes the trip with it', () async {
+      await repo.saveTrip(_trip());
+      expect(await repo.getActiveTrip(), isNotNull);
+
+      await repo.wipe();
+
+      expect(await repo.getActiveTrip(), isNull);
+    });
   });
+
+  group('Trips', () {
+    test('round-trips both ends of the flight as instants', () async {
+      await repo.saveTrip(_trip());
+      final read = (await repo.getActiveTrip())!;
+
+      expect(read.origin.tzId, 'Europe/London');
+      expect(read.destination.tzId, 'Asia/Tokyo');
+      expect(read.origin.label, 'London, United Kingdom');
+      expect(read.origin.latitude, closeTo(51.5074, 1e-6));
+      expect(read.destination.longitude, closeTo(139.6503, 1e-6));
+      expect(read.departureUtc, DateTime.utc(2026, 7, 25, 10));
+      expect(read.arrivalUtc, DateTime.utc(2026, 7, 25, 22));
+      expect(read.departureUtc.isUtc, isTrue,
+          reason: 'a trip read back on local time would replan itself wrong');
+    });
+
+    test('one trip at a time — saving a second replaces the first', () async {
+      await repo.saveTrip(_trip());
+      await repo.saveTrip(_trip(destTz: 'America/Los_Angeles'));
+
+      final read = (await repo.getActiveTrip())!;
+      expect(read.destination.tzId, 'America/Los_Angeles');
+    });
+
+    test('survives until a week after landing, then stops being active',
+        () async {
+      // Landed six days ago: the adaptation it describes is still running.
+      await repo.saveTrip(_trip(
+        departure: _testNow.subtract(const Duration(days: 6, hours: 12)),
+      ));
+      expect(await repo.getActiveTrip(), isNotNull);
+
+      // Landed eight days ago: over.
+      await repo.saveTrip(_trip(
+        departure: _testNow.subtract(const Duration(days: 8, hours: 12)),
+      ));
+      expect(await repo.getActiveTrip(), isNull);
+    });
+
+    test('deletes softly, so the removal can propagate', () async {
+      await repo.saveTrip(_trip());
+      await repo.deleteTrip();
+
+      expect(await repo.getActiveTrip(), isNull);
+      final rows = await db.raw.query('trips');
+      expect(rows, hasLength(1), reason: 'the row stays for sync');
+      expect(rows.first['deleted_at'], isNotNull);
+    });
+
+    test('mirrors writes into the outbox like every other table', () async {
+      final before = await repo.pendingSyncCount();
+      await repo.saveTrip(_trip());
+      expect(await repo.pendingSyncCount(), greaterThan(before));
+    });
+
+    test('watchActiveTrip emits on save and on delete', () async {
+      final seen = <Trip?>[];
+      final sub = repo.watchActiveTrip().listen(seen.add);
+
+      // Waits on the count rather than on a fixed sleep. Every emission
+      // re-runs an async sqflite query, so a hardcoded delay is a race that
+      // passes on a quiet machine and fails in CI.
+      Future<void> emissions(int n) async {
+        final deadline = DateTime.now().add(const Duration(seconds: 5));
+        while (seen.length < n && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      }
+
+      await emissions(1);
+      await repo.saveTrip(_trip());
+      await emissions(2);
+      await repo.deleteTrip();
+      await emissions(3);
+
+      // Deliberately not awaited. `_watch` is an `async*` generator suspended
+      // in `await for` over the change feed, and cancelling it returns a
+      // future that never completes — awaiting it hangs this test until the
+      // 30 s timeout. That is a pre-existing property of every `watch*` stream
+      // in this repository, not of trips: a disposed provider keeps a live
+      // subscription and keeps re-querying on every write. Worth fixing in
+      // `_watch` itself; do not "fix" it by adding an await here.
+      unawaited(sub.cancel());
+
+      expect(seen, hasLength(3));
+      expect(seen.first, isNull, reason: 'no trip to begin with');
+      expect(seen[1], isNotNull, reason: 'the saved trip is pushed out');
+      expect(seen.last, isNull, reason: 'and the delete is too');
+    });
+  });
+}
+
+/// A London to Tokyo long haul, departing three days after [_testNow].
+Trip _trip({DateTime? departure, String destTz = 'Asia/Tokyo'}) {
+  final dep = departure ?? DateTime.utc(2026, 7, 25, 10);
+  return Trip(
+    origin: const GeoLocation(
+      latitude: 51.5074,
+      longitude: -0.1278,
+      tzId: 'Europe/London',
+      label: 'London, United Kingdom',
+    ),
+    destination: GeoLocation(
+      latitude: 35.6762,
+      longitude: 139.6503,
+      tzId: destTz,
+      label: 'Tokyo, Japan',
+    ),
+    departureUtc: dep,
+    arrivalUtc: dep.add(const Duration(hours: 12)),
+  );
 }
