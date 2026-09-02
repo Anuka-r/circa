@@ -1,6 +1,6 @@
 # Circa — Terms of Use
 
-*Effective 25 August 2026*
+*Effective 1 September 2026*
 
 > Circa is a wellbeing tool, not a medical device. Pro is a subscription billed by Google Play that you can cancel at any time.
 
@@ -40,7 +40,7 @@
 
 - Purchases are handled by Google Play, so refunds follow Google Play’s policy and are requested through Google Play.
 
-- If something in Circa did not work as described, write to support@example.com and we will help.
+- If something in Circa did not work as described, write to circa.support.app@gmail.com and we will help.
 
 ## Your data is yours
 
@@ -60,5 +60,5 @@
 
 ## Contact
 
-- Questions about these terms: support@example.com
+- Questions about these terms: circa.support.app@gmail.com
 

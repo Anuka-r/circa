@@ -63,7 +63,7 @@ void main() {
             'lib/features/legal/legal_content.dart before uploading to Play, '
             'then re-run `dart run tool/export_legal.dart`.',
       );
-    }, skip: 'Fails until a real support address is set — see reason above.');
+    });
   });
 
   group('LegalScreen', () {

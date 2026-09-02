@@ -12,11 +12,11 @@ library;
 /// review, and it is the one field in these documents that cannot be derived
 /// from the code. Use an address you actually read — Play also shows it on the
 /// store listing.
-const kCircaContactEmail = 'support@example.com';
+const kCircaContactEmail = 'circa.support.app@gmail.com';
 
 /// The date these documents last changed. Shown to the user and quoted in the
 /// hosted copies under `docs/legal/`; bump it whenever the text below changes.
-const kLegalEffectiveDate = '25 August 2026';
+const kLegalEffectiveDate = '1 September 2026';
 
 /// One section of a legal document.
 class LegalSection {

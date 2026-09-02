@@ -87,7 +87,7 @@ lib/
   services/     city lookup, timezone, purchases
 ```
 
-Notable decisions, each with its reasoning in [docs/](docs/):
+Notable decisions:
 
 - **Hand-written SQL on `sqflite`, not Drift.** `drift_dev` 2.34.0 — the newest
   release compatible with the analyzer `flutter_test` pins — silently drops every
@@ -151,18 +151,6 @@ wall-clock time moved past those windows.
 
 The production code is correct; the tests are not hermetic. The fix is to inject
 a clock rather than to widen the window.
-
-## Documentation
-
-Design and architecture were written before the code. [docs/](docs/) is the index.
-
-| # | Document | |
-|---|---|---|
-| 02 | [Circadian engine](docs/02-circadian-engine.md) | ★ The core IP — every algorithm, with validation |
-| 05 | [Design system](docs/05-design-system.md) | Colour with verified contrast, typography, motion, components |
-| 10 | [Build report](docs/10-build-report.md) | ★ What was actually built, 12 bugs found and fixed, honest gaps |
-| 03 | [Architecture](docs/03-architecture.md) | Decisions and rationale, schema, error model |
-| 06 | [RevenueCat](docs/06-revenuecat.md) | Pricing, entitlements, paywall, gating matrix |
 
 ## Status
 

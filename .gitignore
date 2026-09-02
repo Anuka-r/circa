@@ -44,3 +44,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Google Play service account credentials (RevenueCat purchase validation).
+# Grants "view financial data" and "manage orders" — a real secret, unlike the
+# goog_ SDK key that ships in the client. Never commit; this repo goes public.
+service-account*.json
+play-service-account*.json
+**/google-play-*.json
+
+# Planning and design docs. Kept on disk for reference, out of the public repo.
+# docs/legal/ stays tracked — it hosts the Play privacy policy URL.
+docs/*.md

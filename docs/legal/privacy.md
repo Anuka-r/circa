@@ -1,6 +1,6 @@
 # Circa — Privacy Policy
 
-*Effective 25 August 2026*
+*Effective 1 September 2026*
 
 > Circa keeps your data on your device. There is no Circa account, no Circa server, and nothing to sign in to. The only information that ever leaves your phone is what Google Play and RevenueCat need to process a purchase.
 
@@ -56,7 +56,7 @@
 
 - Uninstalling Circa removes the database with it.
 
-- To delete purchase records held by RevenueCat or Google, contact them, or write to us at support@example.com and we will pass the request on.
+- To delete purchase records held by RevenueCat or Google, contact them, or write to us at circa.support.app@gmail.com and we will pass the request on.
 
 ## Children
 
@@ -68,5 +68,5 @@
 
 ## Contact
 
-- Questions about this policy: support@example.com
+- Questions about this policy: circa.support.app@gmail.com
 
